@@ -11,9 +11,9 @@ import os
 import struct
 import sys
 import argparse
-import urllib
-import urllib2
-import urlparse
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
+import urllib.parse
 import gzip
 import subprocess
 import re
@@ -24,7 +24,7 @@ import errno
 # used by archive file and unpacked archive
 DISK_USAGE_MB = 900
 
-PROCESSOR_TYPES = range(0, 4)
+PROCESSOR_TYPES = list(range(0, 4))
 PROCESSOR_TYPES_NAMES = ['BCM2835', 'BCM2836', 'BCM2837', 'BCM2711']
 
 wiki = "https://github.com/notro/rpi-source/wiki"
@@ -34,7 +34,7 @@ update_tag_file = os.path.join(os.environ.get('HOME'), '.rpi-source')
 argv = sys.argv[:]
 
 parser = argparse.ArgumentParser(description='Raspberry Pi kernel source installer',
-                                  epilog="For more help see: %s" % wiki)
+                                 epilog="For more help see: %s" % wiki)
 parser.add_argument("-d", "--dest", help="Destination directory. Default is $HOME",
                     default=os.environ.get('HOME'))
 parser.add_argument("--nomake", help="Don't run 'make modules_prepare'",
@@ -47,13 +47,15 @@ parser.add_argument("--uri", help="Github repository to use. Default is '%s'" % 
                     default=repo_uri)
 parser.add_argument("--delete", help="Delete downloaded archive",
                     action="store_true")
-parser.add_argument("-s", "--dry-run", help="No action; perform a simulation of events that would occur but do not actually change the system.",
+parser.add_argument("-s", "--dry-run",
+                    help="No action; perform a simulation of events that would occur but do not actually change the system.",
                     action="store_true")
 parser.add_argument("-v", "--verbose", help="Verbose",
                     action="store_true")
 parser.add_argument("-q", "--quiet", help="Quiet",
                     action="store_true")
-parser.add_argument("-g", "--default-config", help="Generate a default kernel configuration with 'make bcmrpi_defconfig'",
+parser.add_argument("-g", "--default-config",
+                    help="Generate a default kernel configuration with 'make bcmrpi_defconfig'",
                     action="store_true")
 parser.add_argument("--processor", type=int, choices=PROCESSOR_TYPES, help="Override Processor type")
 parser.add_argument("--skip-gcc", help=argparse.SUPPRESS, action="store_true")  # Deprecated
@@ -69,26 +71,32 @@ args = parser.parse_args()
 class Kernel:
     pass
 
+
 def debug(str):
     if args.verbose:
         print(str)
 
+
 def info(str):
     if not args.quiet:
-        print("\n *** %s" % str)
+        print(("\n *** %s" % str))
+
 
 def warn(str):
     if not args.quiet:
-        print("\n !!! %s" % str)
+        print(("\n !!! %s" % str))
+
 
 def fail(str):
     sys.stderr.write("ERROR:\n%s\n\nHelp: %s\n" % (str, wiki))
     exit(1)
 
+
 def sh(cmd):
     debug("%s" % cmd)
     if not args.dry_run:
         subprocess.check_call(cmd, shell=True)
+
 
 def sh_out(cmd):
     process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -98,31 +106,35 @@ def sh_out(cmd):
         return None
     return out
 
+
 def writef(f, str, mode='w'):
     debug("writef(%s)" % f)
     if not args.dry_run:
         with open(f, mode) as f:
             f.write(str)
 
+
 def download(url):
     debug("download: %s" % url)
     try:
-        res = urllib2.urlopen(url).read()
-    except urllib2.HTTPError, e:
+        res = urllib.request.urlopen(url).read()
+    except urllib.error.HTTPError as e:
         fail("Couldn't download %s, HTTPError: %s" % (url, e.code))
-    except urllib2.URLError, e:
+    except urllib.error.URLError as e:
         fail("Couldn't download %s, URLError: %s" % (url, e.args))
     return res
+
 
 def download_to(url, file):
     debug("download_to: %s -> %s" % (url, file))
     if not args.dry_run:
-        urllib.urlretrieve (url, file)
+        urllib.request.urlretrieve(url, file)
+
 
 def update_get_head():
     if update_get_head.ref:
         return update_get_head.ref
-    repo_short = urlparse.urlparse(script_repo).path
+    repo_short = urllib.parse.urlparse(script_repo).path
     repo_api = "https://api.github.com/repos%s/git/refs/heads/master" % repo_short
     res = download(repo_api)
     try:
@@ -136,7 +148,10 @@ def update_get_head():
         warn("Self update: Could not get ref of last commit")
         debug("Github returned:\n%s" % res)
         return None
+
+
 update_get_head.ref = None
+
 
 def is_update_needed():
     debug("Check for update to rpi-source")
@@ -152,22 +167,26 @@ def is_update_needed():
     else:
         return False
 
+
 def update_tag():
     ref = update_get_head()
     if not ref:
-       exit(1)
+        exit(1)
     info("Set update tag: %s" % ref)
     writef(update_tag_file, ref)
+
 
 def do_update():
     # MOD: replace current script; do not assume script is located at /usr/bin/rpi-source; also keep ownership and permissions
     script_name = argv[0]
     info("Updating rpi-source")
-    sh("sudo wget %s https://raw.githubusercontent.com/notro/rpi-source/master/rpi-source -O %s" % ("-q" if args.quiet else "", script_name))
+    sh("sudo wget %s https://raw.githubusercontent.com/notro/rpi-source/master/rpi-source -O %s" % (
+        "-q" if args.quiet else "", script_name))
     update_tag()
     info("Restarting rpi-source")
     argv.insert(0, sys.executable)
     os.execv(sys.executable, argv)
+
 
 def check_diskspace(dir):
     df = sh_out("df %s" % dir)
@@ -177,6 +196,7 @@ def check_diskspace(dir):
     if (int(nums[2]) / 1024) < DISK_USAGE_MB:
         fail("Not enough diskspace (%dMB) on %s\nSkip this check with --skip-space" % (DISK_USAGE_MB, dir))
 
+
 # see if gcc major.minor version matches the one used to build the running kernel
 def check_gcc():
     cmd = 'gcc -dumpversion'
@@ -184,7 +204,7 @@ def check_gcc():
     out, err = process.communicate()
     errcode = process.returncode
     if errcode:
-        debug("gcc version check failed: '%s' returned %d" %(cmd, errcode))
+        debug("gcc version check failed: '%s' returned %d" % (cmd, errcode))
     gcc_ver = out.strip()
 
     with open('/proc/version', 'r') as f:
@@ -200,7 +220,9 @@ def check_gcc():
     if a[:2] == b[:2]:
         debug("gcc version check: OK")
     else:
-        debug("gcc version check: mismatch between installed gcc (%s) and /proc/version (%s)" % (gcc_ver[0], gcc_ver_kernel.group(1)))
+        debug("gcc version check: mismatch between installed gcc (%s) and /proc/version (%s)" % (
+            gcc_ver[0], gcc_ver_kernel.group(1)))
+
 
 def proc_config_gz():
     if not os.path.exists('/proc/config.gz'):
@@ -233,7 +255,7 @@ def rpi_update_method(uri):
         fw_rev = f.read().strip()
     info("Firmware revision: %s" % fw_rev)
 
-    repo_short = urlparse.urlparse(uri).path
+    repo_short = urllib.parse.urlparse(uri).path
 
     repo_api = "https://api.github.com/repos%s" % repo_short
     repo_raw = "https://raw.githubusercontent.com%s" % repo_short
@@ -245,6 +267,7 @@ def rpi_update_method(uri):
         kernel.config = proc_config_gz()
 
     return kernel
+
 
 def debian_method(fn):
     kernel = Kernel()
@@ -317,7 +340,9 @@ def get_processor_type():
 
 def check_bc():
     if not os.path.exists('/usr/bin/bc'):
-        fail("bc is NOT installed. Needed by 'make modules_prepare'. On Raspbian, run 'sudo apt-get install bc' to install it.")
+        fail(
+            "bc is NOT installed. Needed by 'make modules_prepare'. On Raspbian, run 'sudo apt-get install bc' to install it.")
+
 
 ##############################################################################
 
@@ -363,7 +388,8 @@ if not args.skip_space:
 linux_tar = os.path.join(args.dest, "linux-%s.tar.gz" % kernel.git_hash)
 if not os.path.exists(linux_tar):
     info("Download kernel source")
-    sh("wget %s -O %s https://github.com/raspberrypi/linux/archive/%s.tar.gz" % (("-q" if args.quiet else ""), linux_tar, kernel.git_hash))
+    sh("wget %s -O %s https://github.com/raspberrypi/linux/archive/%s.tar.gz" % (
+        ("-q" if args.quiet else ""), linux_tar, kernel.git_hash))
 else:
     info("Download kernel source: Already downloaded %s" % linux_tar)
 
@@ -376,7 +402,7 @@ else:
 # This happens automatically in a git repo, but we use a tarball
 info("Add '+' to kernel release string")
 if not args.dry_run:
-    with open(os.path.join(linux_dir, '.scmversion'),"w") as f:
+    with open(os.path.join(linux_dir, '.scmversion'), "w") as f:
         f.write("+")
 
 linux_symlink = os.path.join(args.dest, 'linux')
@@ -412,7 +438,8 @@ if not args.nomake:
     sh("cd %s && make modules_prepare %s" % (linux_symlink, (" > /dev/null" if args.quiet else "")))
 
 if not os.path.exists('/usr/include/ncurses.h'):
-    info("ncurses-devel is NOT installed. Needed by 'make menuconfig'. On Raspbian sudo apt-get install libncurses5-dev")
+    info(
+        "ncurses-devel is NOT installed. Needed by 'make menuconfig'. On Raspbian sudo apt-get install libncurses5-dev")
 
 if args.delete:
     info("Delete downloaded archive")
